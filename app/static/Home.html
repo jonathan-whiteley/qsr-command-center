@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QSR Command Center · #0417</title>
+<link rel="stylesheet" href="colors_and_type.css" />
+<style>
+  html, body, #root { height: 100%; margin: 0; }
+  body { background: var(--db-oat-light); overflow: hidden; }
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--db-navy-300); border-radius: 999px; border: 3px solid var(--db-oat-light); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--db-navy-400); }
+
+  .hb-btn-primary:hover { background: var(--db-lava-700) !important; }
+  .hb-btn-dark:hover { background: var(--db-navy-900) !important; }
+  .hb-btn-ghost:hover { background: var(--db-oat-medium) !important; }
+  .hb-btn-subtle:hover { filter: brightness(0.97); }
+  .hb-btn-quiet:hover { color: var(--db-navy-800) !important; }
+  .hb-card-hover { transition: box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+  .hb-card-hover:hover { box-shadow: var(--shadow-md); border-color: var(--db-navy-300) !important; transform: translateY(-2px); }
+  .hb-nav:hover { background: var(--db-navy-700) !important; color: #fff !important; }
+  .hb-chip-action:hover { background: rgba(255,255,255,0.16) !important; }
+  .hb-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .hb-suggest:hover { border-color: var(--db-navy-300) !important; background: var(--db-oat-light) !important; }
+  .hb-select:hover { border-color: var(--db-navy-300); }
+  .hb-slot:hover { background: var(--db-navy-700) !important; }
+  .hb-step:hover { background: var(--db-oat-medium) !important; }
+  .hb-search:hover { background: var(--db-navy-600) !important; }
+  .hb-iconbtn:hover { opacity: 0.7; }
+  .hb-node { transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out), border-color var(--dur-base) var(--ease-out); }
+  .hb-node:hover { transform: translate(-50%,-50%) scale(1.06) !important; box-shadow: var(--shadow-md); }
+  .hb-hub { transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out); }
+  .hb-hub:hover { transform: translate(-50%,-50%) scale(1.04) !important; box-shadow: var(--shadow-xl); }
+  .lhm-appcard { transition: transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out); }
+  .lhm-appcard:hover { transform: translateY(-3px); box-shadow: var(--shadow-xl); }
+  .hb-textarea:focus { border-color: var(--db-lava-600) !important; box-shadow: var(--shadow-focus); }
+  .hb-toast { animation: hb-rise var(--dur-slow) var(--ease-out); }
+  @keyframes hb-rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  .hb-dots { animation: hb-blink 1.2s steps(4) infinite; }
+  @keyframes hb-blink { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="app/shell.jsx"></script>
+<script type="text/babel" src="app/data.jsx"></script>
+<script type="text/babel" src="app/genie.jsx"></script>
+<script type="text/babel" src="app/home.jsx"></script>
+<script type="text/babel" src="app/labor.jsx"></script>
+<script type="text/babel" src="app/inventory.jsx"></script>
+<script type="text/babel" src="app/equipment.jsx"></script>
+<script type="text/babel" src="app/members.jsx"></script>
+<script type="text/babel" src="app/feedback.jsx"></script>
+<script type="text/babel" src="app/misc.jsx"></script>
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": [
+    "#FFD2BC",
+    "#FF9D72",
+    "#FF7F45",
+    "#FF671B",
+    "#CC4F11"
+  ],
+  "aiBrief": "spotlight",
+  "showKpis": true,
+  "autoGenie": false,
+  "showConfidence": true,
+  "manager": "Maya"
+}/*EDITMODE-END*/;
+
+const ACCENT_OPTIONS = [
+  ["#FFD2BC","#FF9D72","#FF7F45","#FF671B","#CC4F11"], // LCE Orange
+  ["#BAE1FC","#8ACAFF","#4299E0","#2272B4","#0E538B"], // Blue
+  ["#9ED6C4","#70C4AB","#42BA91","#00A972","#00875C"], // Green
+  ["#D69EA8","#BF7080","#AB4057","#98102A","#730D21"], // Maroon
+];
+
+const VIEWS = { today: HomeView, labor: LaborView, inventory: InventoryView, equipment: EquipmentView, members: MembersView, feedback: FeedbackView };
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [view, setView] = useState('today');
+  const [slTab, setSlTab] = useState('sales');
+  const [genieOpen, setGenieOpen] = useState(false);
+  const [genieMsgs, setGenieMsgs] = useState([]);
+  const [toasts, setToasts] = useState([]);
+  const [laborApproved, setLaborApproved] = useState(() => new Set());
+  const [reordersReleased, setReordersReleased] = useState(() => new Set());
+  const [equipmentScheduled, setEquipmentScheduled] = useState({ slot: null });
+  const [membersSent, setMembersSent] = useState(false);
+  const [reviewsReplied, setReviewsReplied] = useState(() => new Set());
+  const [scheduleApproved, setScheduleApproved] = useState(false);
+
+  const pushToast = (msg, tone = 'ok') => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts(ts => [...ts, { id, msg, tone }]);
+    setTimeout(() => setToasts(ts => ts.filter(x => x.id !== id)), 3400);
+  };
+  const go = (v) => {
+    setView(v);
+    const el = document.getElementById('hb-main'); if (el) el.scrollTop = 0;
+  };
+  const [genieConv, setGenieConv] = useState(null);
+  const openGenie = () => setGenieOpen(true);
+  const closeGenie = () => { setGenieOpen(false); setGenieConv(null); setGenieMsgs([]); };
+  const askGenie = (text) => {
+    setGenieOpen(true);
+    setGenieMsgs(m => [...m, { from:'user', text }, { from:'genie', loading:true }]);
+    fetch('/api/genie/ask', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: text, conversation_id: genieConv }),
+    })
+      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => {
+        if (d && d.conversation_id) setGenieConv(d.conversation_id);
+        if (ok && !d.error && d.text) {
+          setGenieMsgs(m => {
+            const c = [...m];
+            c[c.length-1] = { from:'genie', text: d.text, source: d.sql ? 'SQL · ' + d.sql.slice(0, 80) + (d.sql.length > 80 ? '…' : '') : 'Live Genie space' };
+            return c;
+          });
+        } else {
+          // Live Genie call failed; fall back to mock so the chat still feels responsive.
+          const r = genieReply(text);
+          setGenieMsgs(m => {
+            const c = [...m];
+            c[c.length-1] = { from:'genie', ...r, source: (r.source || 'mock') + ' (Genie unavailable: ' + (d && d.error ? d.error : 'HTTP ' + (ok?'200':'err')) + ')' };
+            return c;
+          });
+        }
+      })
+      .catch(e => {
+        const r = genieReply(text);
+        setGenieMsgs(m => {
+          const c = [...m];
+          c[c.length-1] = { from:'genie', ...r, source: (r.source || 'mock') + ' (Genie unreachable)' };
+          return c;
+        });
+      });
+  };
+
+  const lakebaseWrite = async (path, body, okMsg) => {
+    try {
+      const r = await fetch(path, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (r.ok) {
+        pushToast(okMsg + ' · written to Lakebase');
+      } else {
+        pushToast(okMsg + ' · Lakebase write failed', 'warn');
+      }
+    } catch (e) {
+      pushToast(okMsg + ' · Lakebase unreachable', 'warn');
+    }
+  };
+
+  const approveTimecard = (id) => { setLaborApproved(s => new Set(s).add(id)); pushToast('Timecard approved · written to Lakebase'); };
+  const approveAllTimecards = () => { setLaborApproved(new Set(TIMECARDS.map(t => t.id))); pushToast('All timecards approved · written to Lakebase'); };
+  const releasePO = (id, total) => {
+    setReordersReleased(s => new Set(s).add(id));
+    lakebaseWrite('/api/writes/purchase-orders/release', { po_id: id, total_amount: total }, `Purchase order released ($${total.toFixed(0)})`);
+  };
+  const scheduleService = (slot) => { setEquipmentScheduled({ slot }); pushToast(`Cooler #2 service booked · written to Lakebase`); };
+  const sendCampaign = () => { setMembersSent(true); pushToast('Win-back sent to 184 members · written to Lakebase'); };
+  const replyReview = (id, replyText) => {
+    setReviewsReplied(s => new Set(s).add(id));
+    lakebaseWrite('/api/writes/reviews/reply', { feedback_id: id, reply_text: replyText || '' }, 'Reply sent to guest');
+  };
+  const approveSchedule = (summary) => {
+    setScheduleApproved(true);
+    const date = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    lakebaseWrite('/api/writes/schedules/approve', { schedule_date: date, total_hours: summary && summary.hours }, "Tomorrow's schedule approved");
+  };
+
+  const outstanding = {
+    today: 0,
+    labor: TIMECARDS.length - laborApproved.size,
+    inventory: REORDERS.length - reordersReleased.size,
+    equipment: equipmentScheduled.slot ? 0 : 1,
+    members: membersSent ? 0 : 1,
+    feedback: REVIEWS.filter(r => r.needsReply && !reviewsReplied.has(r.id)).length,
+  };
+
+  useEffect(() => { if (t.autoGenie) setGenieOpen(true); }, []);
+
+  const accent = t.accent || ACCENT_OPTIONS[0];
+  const accentVars = { '--db-lava-300':accent[0], '--db-lava-400':accent[1], '--db-lava-500':accent[2], '--db-lava-600':accent[3], '--db-lava-700':accent[4], '--fg-accent':accent[3], '--fg-link':accent[4] };
+  const store = { ...STORE, manager: t.manager || 'Maya' };
+
+  const ctx = { view, go, openGenie, closeGenie, askGenie, genieOpen, genieMsgs, toasts, outstanding, store, t, slTab, setSlTab, pushToast,
+    laborApproved, approveTimecard, approveAllTimecards, reordersReleased, releasePO,
+    equipmentScheduled, scheduleService, membersSent, sendCampaign, reviewsReplied, replyReview,
+    scheduleApproved, approveSchedule };
+
+  const ViewComp = VIEWS[view] || HomeView;
+
+  return (
+    <AppCtx.Provider value={ctx}>
+      <div style={{ display:'flex', height:'100vh', overflow:'hidden', ...accentVars }}>
+        <Sidebar />
+        <div id="hb-main" style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0 }}>
+          <TopBar />
+          <ViewComp />
+        </div>
+        <GeniePanel />
+        <ToastRegion toasts={toasts} />
+      </div>
+
+      <TweaksPanel>
+        <TweakSection label="Brand" />
+        <TweakColor label="Accent" value={t.accent} options={ACCENT_OPTIONS} onChange={v => setTweak('accent', v)} />
+        <TweakSection label="Today screen" />
+        <TweakRadio label="AI brief" value={t.aiBrief} options={['spotlight','compact','minimal']} onChange={v => setTweak('aiBrief', v)} />
+        <TweakToggle label="Open Genie on load" value={t.autoGenie} onChange={v => setTweak('autoGenie', v)} />
+        <TweakSection label="Labor planner" />
+        <TweakToggle label="Show forecast confidence" value={t.showConfidence} onChange={v => setTweak('showConfidence', v)} />
+        <TweakSection label="Store" />
+        <TweakText label="Manager name" value={t.manager} onChange={v => setTweak('manager', v)} />
+      </TweaksPanel>
+    </AppCtx.Provider>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script src="wiring-banner.js"></script>
+</body>
+</html>

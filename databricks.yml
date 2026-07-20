@@ -1,0 +1,61 @@
+# Databricks Asset Bundle — QSR Command Center
+#
+# Deploys the QSR Command Center Databricks App. Designed to stand up cleanly in a
+# fresh workspace: the only hard dependencies are a SQL warehouse and the Guest
+# Sentiment source table. The operational modules (Labor, Inventory, etc.) read
+# additional tables via CC_CATALOG/CC_SCHEMA env vars and degrade gracefully if those
+# tables are absent — the app still boots and Guest Sentiment works.
+#
+# Deploy:
+#   databricks bundle deploy -t dev
+#   databricks bundle run qsr_command_center_app -t dev      # start the app
+#
+# Point at a different workspace/warehouse:
+#   databricks bundle deploy -t dev --var warehouse_id=<sql_warehouse_id>
+
+bundle:
+  name: qsr-command-center
+
+include:
+  - resources/*.yml
+
+variables:
+  warehouse_id:
+    description: "SQL warehouse the app uses for reads. Override per workspace with --var warehouse_id=<id>."
+    lookup:
+      warehouse: "Serverless Starter Warehouse"
+
+  # Guest Sentiment source table (the enhanced module's data).
+  sentiment_catalog:
+    description: "Catalog for the Guest Sentiment source table."
+    default: "jdub_demo"
+  sentiment_schema:
+    description: "Schema for the Guest Sentiment source table."
+    default: "little_caesars"
+  sentiment_table:
+    description: "Guest Sentiment source table name (AI-classified reviews)."
+    default: "location_sentiment"
+
+  # Operational-module tables (Labor / Inventory / Sales). Env-only: NOT granted as UC
+  # securables in the bundle, so a fresh workspace that lacks them still deploys. Set
+  # these if the workshop dataset is present and you want those modules live.
+  cc_catalog:
+    description: "Catalog for the operational-module tables (facts_*/dims_*)."
+    default: "jdub_demo"
+  cc_schema:
+    description: "Schema for the operational-module tables."
+    default: "vibe_workshop"
+
+targets:
+  dev:
+    default: true
+    mode: development
+    presets:
+      name_prefix: ""      # deploy as "qsr-command-center", not "[dev <user>] ..."
+    workspace:
+      profile: DEFAULT
+
+  prod:
+    mode: production
+    workspace:
+      profile: DEFAULT

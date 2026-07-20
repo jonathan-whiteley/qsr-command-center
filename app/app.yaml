@@ -1,0 +1,38 @@
+command:
+  - "uvicorn"
+  - "app:app"
+  - "--host"
+  - "0.0.0.0"
+  - "--port"
+  - "8000"
+
+# Env defaults for the app. The DAB (resources/app.yml) supplies the warehouse binding
+# and CC_* values at deploy time; these are the standalone/first-boot fallbacks.
+env:
+  - name: DEFAULT_DOC
+    value: "Home.html"
+
+  # Warehouse for SQL reads. Bound to the DAB app resource named "warehouse".
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: warehouse
+
+  # Operational-module tables (Labor / Inventory / Sales).
+  - name: CC_CATALOG
+    value: "jdub_demo"
+  - name: CC_SCHEMA
+    value: "vibe_workshop"
+
+  # Guest Sentiment source table (the enhanced module).
+  - name: CC_SENTIMENT_CATALOG
+    value: "jdub_demo"
+  - name: CC_SENTIMENT_SCHEMA
+    value: "little_caesars"
+  - name: CC_SENTIMENT_TABLE
+    value: "location_sentiment"
+  - name: ANCHOR_DATE
+    value: "2026-06-22"
+  - name: FMAPI_ENDPOINT
+    value: "databricks-claude-sonnet-4-6"
+  # Genie space for the Ask module; empty = Ask panel shows a "not configured" state.
+  - name: GENIE_SPACE_ID
+    value: ""

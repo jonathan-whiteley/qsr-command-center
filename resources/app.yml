@@ -1,0 +1,39 @@
+# QSR Command Center — Databricks App resource.
+#
+# After `bundle deploy`, start it with:
+#   databricks bundle run qsr_command_center_app -t dev
+#
+# Grants are intentionally minimal so this deploys in a fresh workspace:
+#   - the SQL warehouse (CAN_USE)
+#   - the Guest Sentiment source table (SELECT)
+# The operational modules read CC_CATALOG/CC_SCHEMA tables via env vars; those are NOT
+# granted here (they may not exist in a new workspace). Add uc_securable grants for them
+# once the workshop dataset is present if you want Labor/Inventory live.
+
+resources:
+  apps:
+    qsr_command_center_app:
+      name: "qsr-command-center"
+      description: "QSR Command Center — multi-module operational app over governed Lakehouse data"
+      source_code_path: ../app
+
+      # OBO scopes so the Ask (Genie) module forwards the user's token to /api/2.0/genie/*.
+      user_api_scopes:
+        - genie
+        - sql
+        - dashboards.genie
+
+      resources:
+        - name: warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: "CAN_USE"
+        - name: sentiment_source
+          uc_securable:
+            securable_full_name: "${var.sentiment_catalog}.${var.sentiment_schema}.${var.sentiment_table}"
+            securable_type: "TABLE"
+            permission: "SELECT"
+
+      # NOTE: env vars (DEFAULT_DOC, CC_*, warehouse binding) live in app/app.yaml, which
+      # ships with the source. The `warehouse` resource name above matches the
+      # `valueFrom: warehouse` binding there. Keep grants here, env there.
