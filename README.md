@@ -40,10 +40,13 @@ does not deploy cleanly via `bundle deploy`). `Homebase.html` is the entrypoint
 Medallion pipeline that ingests + AI-enriches Google reviews into the tables the Guest
 Sentiment module reads.
 
+Notebooks are grouped by domain under `notebooks/<domain>/`; the Guest Sentiment pipeline
+lives in `notebooks/sentiment/`.
+
 | Notebook | Layers | Tables written |
 |---|---|---|
-| `notebooks/01_ingest_clean.ipynb` | Bronze → Silver | `reviews_bronze`, `reviews_silver` |
-| `notebooks/02_enrich.ipynb` | Silver → Gold | `reviews_gold` |
+| `notebooks/sentiment/01_ingest_clean.ipynb` | Bronze → Silver | `reviews_bronze`, `reviews_silver` |
+| `notebooks/sentiment/02_enrich.ipynb` | Silver → Gold | `reviews_gold` |
 
 `02_enrich` folds all AI extraction into ONE `ai_query` per review (classification +
 sentiment + per-aspect ratings + product + `product_issues`) — no second FM pass.
