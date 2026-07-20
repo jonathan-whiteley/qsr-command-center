@@ -21,7 +21,7 @@ from routers import feedback, genie, inventory, labor, today, wiring, writes
 STATIC_DIR = Path(__file__).parent / "static"
 DEFAULT_DOC = os.environ.get("DEFAULT_DOC", "Home.html")
 
-app = FastAPI(title="QSR Command Center")
+app = FastAPI(title="Command Center")
 
 app.include_router(wiring.router)
 app.include_router(today.router)

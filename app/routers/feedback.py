@@ -47,6 +47,14 @@ def _state_clause(state: str | None) -> str:
     return f" AND {_STATE_EXPR} = '{safe}'"
 
 
+def _date_clause(days: int | None) -> str:
+    """Trailing-window date filter, or '' for all-time. Guest Sentiment has no date
+    restriction by default (reviews span 2014→2026); pass days>0 to bound it."""
+    if not days or int(days) <= 0:
+        return ""
+    return f" AND date >= date_sub(current_date(), {int(days)})"
+
+
 class ThemeRow(BaseModel):
     theme: str
     count_7d: int
@@ -136,11 +144,10 @@ def states() -> list[str]:
 
 
 @router.get("/summary", response_model=Summary)
-def summary(days: int = 365, state: str | None = None) -> Summary:
+def summary(days: int | None = None, state: str | None = None) -> Summary:
     """Top-line KPIs: avg rating, % negative, review and store counts, plus
     weakest/strongest category by avg per-category rating."""
-    days = max(1, int(days))
-    where = f"WHERE date >= date_sub(current_date(), {days}){_state_clause(state)}"
+    where = f"WHERE 1=1{_date_clause(days)}{_state_clause(state)}"
     row = fetch_all(
         f"""
         SELECT ROUND(AVG(rating), 2) AS avg_rating,
@@ -236,11 +243,10 @@ def sentiment_timeline(state: str | None = None) -> list[SentimentDay]:
 
 
 @router.get("/products", response_model=list[ProductRow])
-def products(days: int = 365, state: str | None = None) -> list[ProductRow]:
+def products(days: int | None = None, state: str | None = None) -> list[ProductRow]:
     """Product mentions with sentiment split, from the extracted product[] JSON-array
     string. Each product carries a representative negative snippet for the tooltip."""
-    days = max(1, int(days))
-    where = f"WHERE date >= date_sub(current_date(), {days}){_state_clause(state)}"
+    where = f"WHERE 1=1{_date_clause(days)}{_state_clause(state)}"
     rows = fetch_all(
         f"""
         WITH exploded AS (
@@ -302,15 +308,14 @@ _PI_TYPE = "ARRAY<STRUCT<product STRING, issue STRING>>"
 
 
 @router.get("/theme-clusters", response_model=list[ThemeCluster])
-def theme_clusters(days: int = 365, state: str | None = None, min_n: int = 5) -> list[ThemeCluster]:
+def theme_clusters(days: int | None = None, state: str | None = None, min_n: int = 5) -> list[ThemeCluster]:
     """Product × food-quality-issue clusters from NEGATIVE reviews, for the Review Theme
     Explorer. The pairing is AI-extracted per review into the `product_issues` column
     (each {product, issue} genuinely describes that product — no keyword cross-join), so
     here we simply explode it and aggregate: count, avg rating, 7d-vs-prior trend, plus a
     few sample reviews per cluster."""
-    days = max(1, int(days))
     min_n = max(1, int(min_n))
-    where = f"WHERE sentiment = 'Negative' AND date >= date_sub(current_date(), {days}){_state_clause(state)}"
+    where = f"WHERE sentiment = 'Negative'{_date_clause(days)}{_state_clause(state)}"
     # Explode the AI-extracted pairs; aggregate per (product, issue).
     rows = fetch_all(
         f"""
@@ -385,12 +390,11 @@ def theme_clusters(days: int = 365, state: str | None = None, min_n: int = 5) ->
 
 
 @router.get("/store-category", response_model=list[StoreCategoryRow])
-def store_category(days: int = 365, min_n: int = 5, state: str | None = None) -> list[StoreCategoryRow]:
+def store_category(days: int | None = None, min_n: int = 5, state: str | None = None) -> list[StoreCategoryRow]:
     """Store x category sentiment matrix for the heatmap. Stores sorted worst->best
     (most negative first) with a representative negative comment per store."""
-    days = max(1, int(days))
     min_n = max(1, int(min_n))
-    where = f"WHERE date >= date_sub(current_date(), {days}){_state_clause(state)}"
+    where = f"WHERE 1=1{_date_clause(days)}{_state_clause(state)}"
     rows = fetch_all(
         f"""
         WITH scored AS (

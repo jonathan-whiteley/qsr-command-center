@@ -181,10 +181,10 @@ const LakebaseTag = ({ table, tone = 'light' }) => (
 );
 
 /* ============================ Logo ============================ */
-const Logo = ({ size = 26 }) => (
+const Logo = ({ size = 28 }) => (
   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-    <img src="assets/databricks-symbol-light.svg" alt="Databricks" style={{ height:size, width:'auto', display:'block', flexShrink:0 }} />
-    <span style={{ fontSize:16, fontWeight:700, color:'#fff', letterSpacing:'-0.01em' }}>QSR Command Center</span>
+    <img src="assets/little-caesars-logo.svg" alt="Little Caesars" style={{ height:size, width:'auto', display:'block', flexShrink:0 }} />
+    <span style={{ fontSize:16, fontWeight:700, color:'#fff', letterSpacing:'-0.01em' }}>Command Center</span>
   </div>
 );
 

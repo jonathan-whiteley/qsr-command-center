@@ -1,4 +1,4 @@
-// QSR Command Center — Guest feedback module.
+// Homebase app — Guest feedback module.
 
 const Stars = ({ n, size = 14 }) => (
   <div style={{ display:'inline-flex', gap:1 }}>
@@ -309,9 +309,10 @@ const ProductSentiment = ({ rows }) => {
 // highlighted keywords. Wired to the live /theme-clusters data.
 // Palette: design colors keyed to our extracted product concepts; [bg, text].
 const TE_PALETTE = {
-  'Pizza': ['#FF5F46', '#fff'], 'Crazy Bread': ['#FFAB00', '#1B3139'], 'Wings': ['#618794', '#fff'],
-  'Crazy Puffs': ['#00A972', '#fff'], 'Cheese': ['#1B5162', '#fff'], 'Deep Dish': ['#98102A', '#fff'],
-  'Pepperoni': ['#E65100', '#fff'], 'Sauce': ['#7A5C8A', '#fff'], 'Crust': ['#B5651D', '#fff'],
+  'Pizza': ['#FF5F46', '#fff'], 'Pepperoni': ['#E65100', '#fff'], 'Cheese': ['#1B5162', '#fff'],
+  'EMB': ['#C2185B', '#fff'], 'Crazy Bread': ['#FFAB00', '#1B3139'],
+  'Italian Cheese Bread': ['#B5651D', '#fff'], 'Crazy Sauce': ['#7A5C8A', '#fff'],
+  'Wings': ['#618794', '#fff'], 'Crazy Puffs': ['#00A972', '#fff'], 'Deep Dish': ['#98102A', '#fff'],
   'Stuffed Crust': ['#3B82C4', '#fff'],
 };
 const TE_FALLBACK = ['#FF5F46', '#FFAB00', '#618794', '#00A972', '#1B5162', '#98102A', '#E65100', '#7A5C8A', '#B5651D', '#3B82C4'];
@@ -443,19 +444,8 @@ const ThemeExplorer = ({ rows }) => {
         {/* bubble field + legend */}
         <div style={{ flex: 'none', width: TE_W + 40, padding: '16px 20px 12px', borderRight: '1px solid var(--db-gray-lines)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ position: 'relative', width: TE_W, height: TE_H, margin: '0 auto' }}>
-            {/* product cluster labels — solid pill chips in the product color, clamped
-                so none spills past the field edges */}
-            {products.map((p, i) => {
-              const ctr = centroids[p]; if (!ctr) return null;
-              const [bg, fg] = teColor(p, i);
-              const lx = Math.max(58, Math.min(TE_W - 58, ctr.x)); // keep pill within field
-              return (
-                <div key={'lbl-' + p} style={{ position: 'absolute', left: lx, top: Math.max(0, ctr.y - 20), transform: 'translateX(-50%)',
-                  fontSize: 11, fontWeight: 700, letterSpacing: '0.02em', color: fg, background: bg,
-                  padding: '3px 10px', borderRadius: 999, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 25,
-                  border: '1.5px solid #fff', boxShadow: '0 2px 6px rgba(27,49,57,.28)' }}>{p}</div>
-              );
-            })}
+            {/* Product name is conveyed by bubble color (see legend below); no on-canvas
+                cluster labels. */}
             {clusters.map(c => {
               const L = layout[c.id]; if (!L) return null;
               const [bg, fg] = teColor(c.product, prodIdx[c.product]);
@@ -701,9 +691,9 @@ const FeedbackView = () => {
     const qAmp = q ? `${q}&` : '?';
     setSummary(null); setLiveStoreCat(null); setLiveProducts(null); setLiveTimeline(null); setLiveReviews(null); setLiveClusters(null);
     fetch(`/api/feedback/summary${q}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(setSummary).catch(() => {});
-    fetch(`/api/feedback/store-category${qAmp}days=365&min_n=5`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(setLiveStoreCat).catch(() => {});
+    fetch(`/api/feedback/store-category${qAmp}min_n=5`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(setLiveStoreCat).catch(() => {});
     fetch(`/api/feedback/products${q}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(setLiveProducts).catch(() => {});
-    fetch(`/api/feedback/theme-clusters${qAmp}days=365&min_n=5`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(setLiveClusters).catch(() => {});
+    fetch(`/api/feedback/theme-clusters${qAmp}min_n=5`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(setLiveClusters).catch(() => {});
     fetch(`/api/feedback/sentiment-timeline${q}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(setLiveTimeline).catch(() => {});
     fetch(`/api/feedback/reviews${qAmp}limit=300`, { credentials: 'include' }).then(r => r.ok ? r.json() : null).then(setLiveReviews).catch(() => {});
   }, [state]);
