@@ -88,16 +88,33 @@ the store label + State filter from `location_name` being `"City, ST"`
   `concat_ws(', ', City, State)` yields e.g. `"Chesapeake, VA"`, from which the State
   filter parses `VA` cleanly.
 
-### 3a. Notebook change
+### 3a. Notebook change (already in the repo pipeline)
 
-Apply `sentiment_tab_update/sql/gold_add_location_name.sql` inside the gold-building
-notebook (object id `1840423847936134`). It **replaces** the numeric `location_name`
-with `concat_ws(', ', d.City, d.State)` from the `worst_performing_stores` join. It is
-idempotent (`CREATE OR REPLACE`). **Replace, do not add** a second `location_name`
-column — a duplicate causes `AMBIGUOUS_REFERENCE` in every downstream query.
+This logic now lives in **`notebooks/sentiment/02_enrich.ipynb`** (the Silver → Gold
+enrich step), so on a normal pipeline run `reviews_gold` is written with the correct
+`location_name` — no separate patch step is needed. Specifics:
 
-Run the three verification queries at the bottom of that SQL file. Expected: one
-`"City, ST"` per store, clean 2-letter states, `unmatched = 0`.
+- The store-dim join is **widget-driven**. Set the enrich notebook's widgets for the LCE
+  (prod) run:
+  - `catalog` = `ioc_sandbox`, `schema` = `ai_strategy`
+  - `stores_table` = `ioc_sandbox.ai_strategy.worst_performing_stores`
+  - `stores_id_col` = `Location ID`
+- With `stores_table` set, `location_name` is
+  `COALESCE(NULLIF(concat_ws(', ', s.City, s.State), ''), CAST(b.locationId AS STRING))`
+  → e.g. `"Chesapeake, VA"`, falling back to the raw `locationId` for any store not in
+  the dim. Because the enrich step `CREATE OR REPLACE`s `reviews_gold` fresh from Silver,
+  there is no duplicate-`location_name` risk. Leave `stores_table` blank in test and
+  `location_name` falls back to the `locationId`.
+
+Verified against live LCE data (2026-07-21): all 12 populated stores resolve to a clean
+`"City, ST"` and the State filter parses the trailing 2-letter code for every one.
+
+> `sentiment_tab_update/sql/gold_add_location_name.sql` remains in this package as a
+> **standalone patch** for the case where you only want to fix an already-built
+> `reviews_gold` without re-running the enrich notebook. It does the same join via
+> `CREATE OR REPLACE TABLE ... AS SELECT`; in that path you must **replace, not add** the
+> existing numeric `location_name` (a duplicate causes `AMBIGUOUS_REFERENCE`). Prefer the
+> notebook path above for normal pipeline runs.
 
 > Data volume note: `reviews_gold` is actively being populated (was 10 rows/7 stores,
 > then 20/12 within an hour on 2026-07-21). The tab's heatmap/Theme Explorer use a
