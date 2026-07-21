@@ -1,20 +1,23 @@
-"""/api/feedback — all rollups sourced from location_sentiment.
+"""/api/feedback — all rollups sourced from the reviews-gold table.
 
 Everything here reads {sentiment_catalog}.{sentiment_schema}.{sentiment_table}
-(default jdub_demo.little_caesars.location_sentiment). That table is a demo extract
-whose AI-derived columns are stored as STRINGS:
-  - `classification` and `product` are JSON array strings, e.g. '["Pizza","Cheese"]'
-    (parse with from_json(..., 'ARRAY<STRING>')).
-  - the five *_rating columns are strings ('null'/null when not scored) — TRY_CAST to DOUBLE.
-  - `sentiment` is capitalized (Positive / Negative / Mixed / Neutral).
-  - `date` is a timestamp spanning years — so we bound queries by date.
+(in LCE: ioc_sandbox.ai_strategy.reviews_gold). Two source facts drive `_src()`:
+
+  1. `location_name` is a human "City, ST" string. In LCE the gold notebook adds this
+     column via a store-dim join (see sentiment_tab_update/sql/gold_add_location_name.sql)
+     so the app needs no dim knowledge — State is the last comma-separated segment.
+  2. `classification`, `product`, `product_issues` are NATIVE array/struct-array
+     columns. `_src()` re-emits them as JSON strings via to_json(...), so every query
+     below reads them exactly as the original demo contract did:
+       - `classification` / `product` → JSON array strings '["Pizza","Cheese"]'
+         (parsed with from_json(..., 'ARRAY<STRING>')).
+       - `product_issues` → JSON array-of-structs string (see _PI_TYPE).
+  Also: the five *_rating columns TRY_CAST to DOUBLE; `sentiment` is capitalized
+  (Positive / Negative / Mixed / Neutral); `date` spans years so queries bound by date.
 
 `product` is an enum-constrained concept list (Pizza, Crazy Bread, Wings, Cheese,
 Sauce, Crust, Pepperoni, Crazy Puffs, Deep Dish, Stuffed Crust), AI-extracted whenever
 a product is named anywhere in the review — it replaces the old app-layer keyword map.
-
-State is derived from the last comma-separated segment of location_name for now
-(a dedicated state-code column is planned).
 """
 from __future__ import annotations
 
@@ -31,9 +34,20 @@ _STATE_EXPR = "trim(element_at(split(location_name, ','), -1))"
 
 
 def _src() -> str:
-    """Fully-qualified source table from settings."""
+    """Source subquery: the reviews-gold table with its native array/struct columns
+    re-emitted as JSON strings, so the rest of this file's from_json(...) logic is
+    unchanged. `location_name` is passed through as-is (the gold notebook already
+    populates it as "City, ST"). All other columns pass through unchanged."""
     s = get_settings()
-    return f"{s.sentiment_catalog}.{s.sentiment_schema}.{s.sentiment_table}"
+    tbl = f"{s.sentiment_catalog}.{s.sentiment_schema}.{s.sentiment_table}"
+    return f"""(
+      SELECT
+        * EXCEPT (classification, product, product_issues),
+        to_json(classification) AS classification,
+        to_json(product)        AS product,
+        to_json(product_issues) AS product_issues
+      FROM {tbl}
+    )"""
 
 
 def _state_clause(state: str | None) -> str:
@@ -78,7 +92,11 @@ class StoreCategoryRow(BaseModel):
     service: float | None = None
     n: int
     pct_neg: float
-    snippet: str | None = None
+    snippet: str | None = None  # store-wide fallback (longest negative comment)
+    # Per-category negative snippet, keyed by category key (speed / cleanliness /
+    # order_accuracy / quality / service). The heatmap tooltip shows the one for the
+    # hovered category, falling back to `snippet` when a category has none.
+    snippets: dict[str, str] = {}
 
 
 class Summary(BaseModel):
@@ -404,7 +422,7 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
                  TRY_CAST(order_accuracy_rating AS DOUBLE) AS order_accuracy,
                  TRY_CAST(quality_rating        AS DOUBLE) AS quality,
                  TRY_CAST(service_rating        AS DOUBLE) AS service,
-                 sentiment, comment
+                 sentiment, comment, classification
           FROM {_src()}
           {where}
         ),
@@ -429,11 +447,44 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
                  ) AS rn
           FROM scored
           WHERE sentiment = 'Negative' AND comment IS NOT NULL AND length(comment) > 0
+        ),
+        -- Per-(store, category) negative snippet: explode each review's classification[]
+        -- into category keys, keep the longest negative comment per (store, category).
+        cat_exploded AS (
+          SELECT location_name, comment,
+                 CASE theme
+                   WHEN 'Speed'          THEN 'speed'
+                   WHEN 'Cleanliness'    THEN 'cleanliness'
+                   WHEN 'Order Accuracy' THEN 'order_accuracy'
+                   WHEN 'Quality'        THEN 'quality'
+                   WHEN 'Service'        THEN 'service'
+                 END AS cat_key
+          FROM scored
+          LATERAL VIEW explode(from_json(classification, 'ARRAY<STRING>')) t AS theme
+          WHERE sentiment = 'Negative' AND comment IS NOT NULL AND length(comment) > 0
+        ),
+        cat_snip AS (
+          SELECT location_name, cat_key, comment,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY location_name, cat_key
+                   ORDER BY length(comment) DESC
+                 ) AS rn
+          FROM cat_exploded
+          WHERE cat_key IS NOT NULL
+        ),
+        cat_map AS (
+          SELECT location_name,
+                 map_from_entries(collect_list(struct(cat_key, comment))) AS snippets
+          FROM cat_snip
+          WHERE rn = 1
+          GROUP BY location_name
         )
         SELECT a.location_name, a.speed, a.cleanliness, a.order_accuracy,
-               a.quality, a.service, a.n, a.pct_neg, sn.comment AS snippet
+               a.quality, a.service, a.n, a.pct_neg, sn.comment AS snippet,
+               cm.snippets AS snippets
         FROM agg a
         LEFT JOIN snip sn ON sn.location_name = a.location_name AND sn.rn = 1
+        LEFT JOIN cat_map cm ON cm.location_name = a.location_name
         ORDER BY a.pct_neg DESC, a.n DESC
         """,
     )
@@ -441,12 +492,18 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
     for r in rows:
         def f(v):
             return float(v) if v is not None else None
+        # The SQL MAP<STRING,STRING> comes back as either a dict or a list of
+        # (key, value) pairs depending on connector version — normalize both.
+        raw_snips = r.get("snippets") or {}
+        pairs = raw_snips.items() if isinstance(raw_snips, dict) else raw_snips
+        snippets = {k: v for k, v in pairs if isinstance(v, str) and v}
         out.append(StoreCategoryRow(
             location_name=r["location_name"],
             speed=f(r["speed"]), cleanliness=f(r["cleanliness"]),
             order_accuracy=f(r["order_accuracy"]), quality=f(r["quality"]),
             service=f(r["service"]), n=int(r["n"] or 0),
             pct_neg=float(r["pct_neg"] or 0), snippet=r.get("snippet"),
+            snippets=snippets,
         ))
     return out
 

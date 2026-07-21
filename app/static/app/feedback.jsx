@@ -112,9 +112,12 @@ const SentimentHeatmap = ({ rows }) => {
   // sort: key='default' (worst→best, as returned), 'store', or a category key. dir='asc'|'desc'.
   const [sort, setSort] = useState({ key: 'default', dir: 'desc' });
   const move = (e, s, catKey, catLabel, v) => {
+    // Prefer a snippet from a review that actually mentioned this category; fall back
+    // to the store-wide snippet when that category has no dedicated negative comment.
+    const catSnippet = (s.snippets && s.snippets[catKey]) || s.snippet;
     setTip({
       x: e.clientX, y: e.clientY, store: hmShortName(s.location_name), addr: hmAddr(s.location_name),
-      cat: catLabel, v, n: s.n, snippet: s.snippet,
+      cat: catLabel, v, n: s.n, snippet: catSnippet,
     });
   };
   const clickHead = (key) => setSort(prev =>

@@ -92,7 +92,11 @@ class StoreCategoryRow(BaseModel):
     service: float | None = None
     n: int
     pct_neg: float
-    snippet: str | None = None
+    snippet: str | None = None  # store-wide fallback (longest negative comment)
+    # Per-category negative snippet, keyed by category key (speed / cleanliness /
+    # order_accuracy / quality / service). The heatmap tooltip shows the one for the
+    # hovered category, falling back to `snippet` when a category has none.
+    snippets: dict[str, str] = {}
 
 
 class Summary(BaseModel):
@@ -418,7 +422,7 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
                  TRY_CAST(order_accuracy_rating AS DOUBLE) AS order_accuracy,
                  TRY_CAST(quality_rating        AS DOUBLE) AS quality,
                  TRY_CAST(service_rating        AS DOUBLE) AS service,
-                 sentiment, comment
+                 sentiment, comment, classification
           FROM {_src()}
           {where}
         ),
@@ -443,11 +447,44 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
                  ) AS rn
           FROM scored
           WHERE sentiment = 'Negative' AND comment IS NOT NULL AND length(comment) > 0
+        ),
+        -- Per-(store, category) negative snippet: explode each review's classification[]
+        -- into category keys, keep the longest negative comment per (store, category).
+        cat_exploded AS (
+          SELECT location_name, comment,
+                 CASE theme
+                   WHEN 'Speed'          THEN 'speed'
+                   WHEN 'Cleanliness'    THEN 'cleanliness'
+                   WHEN 'Order Accuracy' THEN 'order_accuracy'
+                   WHEN 'Quality'        THEN 'quality'
+                   WHEN 'Service'        THEN 'service'
+                 END AS cat_key
+          FROM scored
+          LATERAL VIEW explode(from_json(classification, 'ARRAY<STRING>')) t AS theme
+          WHERE sentiment = 'Negative' AND comment IS NOT NULL AND length(comment) > 0
+        ),
+        cat_snip AS (
+          SELECT location_name, cat_key, comment,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY location_name, cat_key
+                   ORDER BY length(comment) DESC
+                 ) AS rn
+          FROM cat_exploded
+          WHERE cat_key IS NOT NULL
+        ),
+        cat_map AS (
+          SELECT location_name,
+                 map_from_entries(collect_list(struct(cat_key, comment))) AS snippets
+          FROM cat_snip
+          WHERE rn = 1
+          GROUP BY location_name
         )
         SELECT a.location_name, a.speed, a.cleanliness, a.order_accuracy,
-               a.quality, a.service, a.n, a.pct_neg, sn.comment AS snippet
+               a.quality, a.service, a.n, a.pct_neg, sn.comment AS snippet,
+               cm.snippets AS snippets
         FROM agg a
         LEFT JOIN snip sn ON sn.location_name = a.location_name AND sn.rn = 1
+        LEFT JOIN cat_map cm ON cm.location_name = a.location_name
         ORDER BY a.pct_neg DESC, a.n DESC
         """,
     )
@@ -455,12 +492,18 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
     for r in rows:
         def f(v):
             return float(v) if v is not None else None
+        # The SQL MAP<STRING,STRING> comes back as either a dict or a list of
+        # (key, value) pairs depending on connector version — normalize both.
+        raw_snips = r.get("snippets") or {}
+        pairs = raw_snips.items() if isinstance(raw_snips, dict) else raw_snips
+        snippets = {k: v for k, v in pairs if isinstance(v, str) and v}
         out.append(StoreCategoryRow(
             location_name=r["location_name"],
             speed=f(r["speed"]), cleanliness=f(r["cleanliness"]),
             order_accuracy=f(r["order_accuracy"]), quality=f(r["quality"]),
             service=f(r["service"]), n=int(r["n"] or 0),
             pct_neg=float(r["pct_neg"] or 0), snippet=r.get("snippet"),
+            snippets=snippets,
         ))
     return out
 
