@@ -47,9 +47,11 @@ function genieReply(q) {
 }
 
 const SUGGESTIONS = [
-  'Which items are at risk of running out tomorrow?',
-  'How did labor track against forecast this week?',
-  'What are guests complaining about most this month?',
+  'What products get the most complaints?',
+  'Which stores have the most negative reviews?',
+  'How has sentiment trended over the last 3 months?',
+  'Show cleanliness ratings by state.',
+  'What is the average rating by category across all stores?',
 ];
 
 /* Render the LIGHT markdown Genie returns: **bold**, • bullets, blank-line paragraphs.

@@ -317,13 +317,15 @@ const ProductSentiment = ({ rows }) => {
 // color-grouped bubble clusters (size = mention volume, color = product); clicking a
 // bubble drives a detail panel with mentions / avg rating / share + sample reviews with
 // highlighted keywords. Wired to the live /theme-clusters data.
-// Palette: design colors keyed to our extracted product concepts; [bg, text].
+// Palette: one distinct color per product in the pipeline's product enum (see
+// notebooks/sentiment/02_enrich.ipynb). Keys must match the AI-emitted product names
+// exactly, or a product falls through to TE_FALLBACK and can collide with a keyed color.
 const TE_PALETTE = {
-  'Pizza': ['#FF5F46', '#fff'], 'Pepperoni': ['#E65100', '#fff'], 'Cheese': ['#1B5162', '#fff'],
-  'EMB': ['#C2185B', '#fff'], 'Crazy Bread': ['#FFAB00', '#1B3139'],
-  'Italian Cheese Bread': ['#B5651D', '#fff'], 'Crazy Sauce': ['#7A5C8A', '#fff'],
-  'Wings': ['#618794', '#fff'], 'Crazy Puffs': ['#00A972', '#fff'], 'Deep Dish': ['#98102A', '#fff'],
-  'Stuffed Crust': ['#3B82C4', '#fff'],
+  'Pizza': ['#FF5F46', '#fff'], 'Crazy Bread': ['#FFAB00', '#1B3139'],
+  'Cheese': ['#1B5162', '#fff'], 'Pepperoni': ['#E65100', '#fff'],
+  'Wings': ['#618794', '#fff'], 'Sauce': ['#7A5C8A', '#fff'],
+  'Deep Dish': ['#98102A', '#fff'], 'Crazy Puffs': ['#00A972', '#fff'],
+  'Crust': ['#B5651D', '#fff'], 'Stuffed Crust': ['#3B82C4', '#fff'],
 };
 const TE_FALLBACK = ['#FF5F46', '#FFAB00', '#618794', '#00A972', '#1B5162', '#98102A', '#E65100', '#7A5C8A', '#B5651D', '#3B82C4'];
 const teColor = (product, idx) => TE_PALETTE[product] || [TE_FALLBACK[idx % TE_FALLBACK.length], '#fff'];
