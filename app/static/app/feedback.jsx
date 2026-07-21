@@ -88,7 +88,7 @@ const SentimentTimeline = ({ data }) => {
 };
 
 /* ============================ Sentiment heatmap (store x category) ============================ */
-// LCE brand + diverging sentiment scale (validated poles: red #D6322C .. cream .. green #1F9E73)
+// Brand + diverging sentiment scale (validated poles: red #D6322C .. cream .. green #1F9E73)
 const HM_CATS = [
   ['speed', 'Speed'], ['cleanliness', 'Cleanliness'], ['order_accuracy', 'Order Accuracy'],
   ['quality', 'Quality'], ['service', 'Service'],

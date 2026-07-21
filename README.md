@@ -2,8 +2,8 @@
 
 A repeatable, QSR-specific command-center application on Databricks: one operational
 cockpit for a restaurant brand, built as a set of modules over governed Lakehouse data,
-plus the data pipeline that feeds it. Little Caesars is the current reference dataset;
-the app and pipeline are meant to be re-pointed at any QSR brand.
+plus the data pipeline that feeds it. The app and pipeline are brand-agnostic and meant
+to be re-pointed at any QSR brand's data.
 
 ## Layout
 
@@ -53,10 +53,7 @@ sentiment + per-aspect ratings + product + `product_issues`) — no second FM pa
 
 ### Environments (widget-driven)
 - **Test (default):** `jdub_demo.little_caesars` — sample data in the personal workspace.
-- **Prod:** `ioc_sandbox.ai_strategy` — LCE dev environment. Set via Job widget overrides only.
-
-⚠️ **Do not run against the prod LCE schema (`ioc_sandbox.ai_strategy`) ad hoc.** Notebooks
-default to the test schema; prod is reached only through an explicit, intentional Job run.
+- **Prod:** set via Job widget overrides (`catalog` / `schema`) at deploy time.
 
 ### Run as a Job
 Two tasks: `01_ingest_clean` → `02_enrich` (dependency). Set the Uberall API key via a
