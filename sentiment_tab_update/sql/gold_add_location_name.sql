@@ -7,43 +7,33 @@
 -- side; all array/struct columns stay NATIVE (the app serializes them to JSON at
 -- read time in feedback.py._src()).
 --
--- Where this goes: fold this into the gold-building notebook
---   (Ryan Marson's notebook, object id 1840423847936134) as the final step that
---   writes reviews_gold. It is written to be idempotent / re-runnable.
+-- Where this normally lives: this exact logic is a step in the enrich notebook
+--   (notebooks/sentiment/02_enrich.ipynb, the cell AFTER the ai_query cell). On a
+--   normal pipeline run reviews_gold is already written with the right location_name,
+--   so this standalone file is only needed to PATCH an already-built table without
+--   re-running the notebook.
 --
 -- Source of City/State: ioc_sandbox.ai_strategy.worst_performing_stores, joined on
---   worst_performing_stores.`Location ID` = reviews_gold.locationId
---   (this is the exact join the gold notebook already uses elsewhere).
---
--- IMPORTANT — replace, don't duplicate:
---   reviews_gold ALREADY has a `location_name` column (currently the numeric
---   directory id). You must REPLACE it, not add a second one, or every query that
---   references location_name will fail with AMBIGUOUS_REFERENCE. The
---   `* EXCEPT (location_name)` below handles that.
+--   worst_performing_stores.`Location ID` = reviews_gold.locationId. Verified unique
+--   on `Location ID` (safe for MERGE).
 -- ============================================================================
 
--- ---------------------------------------------------------------------------
--- Option A (recommended): rebuild reviews_gold with location_name replaced.
--- Use this form INSIDE the gold notebook, at the point where reviews_gold is
--- (re)written. It preserves every existing column and its type; only
--- location_name changes from the numeric id to "City, ST".
--- ---------------------------------------------------------------------------
-CREATE OR REPLACE TABLE ioc_sandbox.ai_strategy.reviews_gold AS
-SELECT
-  g.* EXCEPT (location_name),
-  concat_ws(', ', d.City, d.State) AS location_name
-FROM ioc_sandbox.ai_strategy.reviews_gold g
-LEFT JOIN ioc_sandbox.ai_strategy.worst_performing_stores d
-  ON g.locationId = d.`Location ID`;
-
--- NOTE: if the gold notebook builds reviews_gold from an upstream dataframe/CTE
--- (not by reading reviews_gold itself), apply the same idea there instead: drop the
--- old numeric location_name and add `concat_ws(', ', d.City, d.State) AS location_name`
--- from the worst_performing_stores join. The CREATE OR REPLACE above is the
--- table-to-table form for when you just want to patch the already-built table.
+-- In-place update: set location_name = "City, ST" for every review whose store is in
+-- the dim. concat_ws skips NULL city/state parts; NULLIF('') leaves rows with no
+-- city/state untouched (they keep whatever location_name they had, e.g. the locationId).
+-- Idempotent: re-running recomputes from the dim each time.
+MERGE INTO ioc_sandbox.ai_strategy.reviews_gold AS g
+USING (
+  SELECT `Location ID` AS loc_id,
+         NULLIF(concat_ws(', ', City, State), '') AS city_state
+  FROM ioc_sandbox.ai_strategy.worst_performing_stores
+) AS s
+ON g.locationId = s.loc_id
+WHEN MATCHED AND s.city_state IS NOT NULL
+  THEN UPDATE SET g.location_name = s.city_state;
 
 -- ---------------------------------------------------------------------------
--- Verification (run after the rebuild). All three should look right:
+-- Verification (run after the MERGE). All three should look right:
 -- ---------------------------------------------------------------------------
 
 -- 1) location_name is now "City, ST", one row per store with counts:
@@ -58,9 +48,8 @@ FROM ioc_sandbox.ai_strategy.reviews_gold
 GROUP BY 1
 ORDER BY n DESC;
 
--- 3) No unmatched stores (location_name should never be just an empty ", " or NULL).
---    Any rows here mean a locationId missing from worst_performing_stores — fill the
---    dim or fall back to the id.
-SELECT count(*) AS unmatched
+-- 3) Any store still showing a bare numeric location_name = not matched in the dim.
+--    Fill the dim or accept the locationId fallback for those.
+SELECT count(*) AS unmatched_reviews
 FROM ioc_sandbox.ai_strategy.reviews_gold
-WHERE location_name IS NULL OR trim(location_name) IN ('', ',');
+WHERE location_name RLIKE '^[0-9]+$';
