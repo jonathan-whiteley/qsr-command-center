@@ -112,9 +112,16 @@ const SentimentHeatmap = ({ rows }) => {
   // sort: key='default' (worst→best, as returned), 'store', or a category key. dir='asc'|'desc'.
   const [sort, setSort] = useState({ key: 'default', dir: 'desc' });
   const move = (e, s, catKey, catLabel, v) => {
-    // Prefer a snippet from a review that actually mentioned this category; fall back
-    // to the store-wide snippet when that category has no dedicated negative comment.
-    const catSnippet = (s.snippets && s.snippets[catKey]) || s.snippet;
+    // Show a snippet whose tone matches the cell: a green (>=3.5) cell shows a positive
+    // comment about this category, a red/mixed cell a negative one. Prefer a matching-tone
+    // per-category comment; fall back to the other tone, then the store-wide snippet, so a
+    // cell is never paired with a clearly contradictory quote.
+    const pos = (s.pos_snippets && s.pos_snippets[catKey]) || null;
+    const neg = (s.neg_snippets && s.neg_snippets[catKey]) || null;
+    // Green cell -> positive comment only; red/mixed cell -> negative comment only.
+    // If the matching tone has no comment, show none rather than a contradictory quote
+    // (the store-wide s.snippet is always negative, so it only backs a non-positive cell).
+    const catSnippet = v >= 3.5 ? pos : (neg || s.snippet);
     setTip({
       x: e.clientX, y: e.clientY, store: hmShortName(s.location_name), addr: hmAddr(s.location_name),
       cat: catLabel, v, n: s.n, snippet: catSnippet,

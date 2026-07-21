@@ -93,10 +93,13 @@ class StoreCategoryRow(BaseModel):
     n: int
     pct_neg: float
     snippet: str | None = None  # store-wide fallback (longest negative comment)
-    # Per-category negative snippet, keyed by category key (speed / cleanliness /
-    # order_accuracy / quality / service). The heatmap tooltip shows the one for the
-    # hovered category, falling back to `snippet` when a category has none.
-    snippets: dict[str, str] = {}
+    # Per-category snippets keyed by category key (speed / cleanliness /
+    # order_accuracy / quality / service), split by tone so the heatmap can show a
+    # comment whose sentiment matches the cell color: green cells show a positive
+    # snippet, red cells a negative one. Each is the longest matching comment that
+    # (a) mentioned that category and (b) has the given overall sentiment.
+    pos_snippets: dict[str, str] = {}
+    neg_snippets: dict[str, str] = {}
 
 
 class Summary(BaseModel):
@@ -448,10 +451,11 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
           FROM scored
           WHERE sentiment = 'Negative' AND comment IS NOT NULL AND length(comment) > 0
         ),
-        -- Per-(store, category) negative snippet: explode each review's classification[]
-        -- into category keys, keep the longest negative comment per (store, category).
+        -- Per-(store, category, tone) snippet: explode each review's classification[]
+        -- into category keys, then keep the longest comment per (store, category, tone)
+        -- so the heatmap can show a comment whose sentiment matches the cell color.
         cat_exploded AS (
-          SELECT location_name, comment,
+          SELECT location_name, comment, sentiment,
                  CASE theme
                    WHEN 'Speed'          THEN 'speed'
                    WHEN 'Cleanliness'    THEN 'cleanliness'
@@ -461,12 +465,12 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
                  END AS cat_key
           FROM scored
           LATERAL VIEW explode(from_json(classification, 'ARRAY<STRING>')) t AS theme
-          WHERE sentiment = 'Negative' AND comment IS NOT NULL AND length(comment) > 0
+          WHERE sentiment IN ('Positive', 'Negative') AND comment IS NOT NULL AND length(comment) > 0
         ),
         cat_snip AS (
-          SELECT location_name, cat_key, comment,
+          SELECT location_name, cat_key, sentiment, comment,
                  ROW_NUMBER() OVER (
-                   PARTITION BY location_name, cat_key
+                   PARTITION BY location_name, cat_key, sentiment
                    ORDER BY length(comment) DESC
                  ) AS rn
           FROM cat_exploded
@@ -474,36 +478,41 @@ def store_category(days: int | None = None, min_n: int = 5, state: str | None = 
         ),
         cat_map AS (
           SELECT location_name,
-                 map_from_entries(collect_list(struct(cat_key, comment))) AS snippets
+                 map_from_entries(collect_list(struct(cat_key, comment)) FILTER (WHERE sentiment = 'Positive')) AS pos_snippets,
+                 map_from_entries(collect_list(struct(cat_key, comment)) FILTER (WHERE sentiment = 'Negative')) AS neg_snippets
           FROM cat_snip
           WHERE rn = 1
           GROUP BY location_name
         )
         SELECT a.location_name, a.speed, a.cleanliness, a.order_accuracy,
                a.quality, a.service, a.n, a.pct_neg, sn.comment AS snippet,
-               cm.snippets AS snippets
+               cm.pos_snippets AS pos_snippets, cm.neg_snippets AS neg_snippets
         FROM agg a
         LEFT JOIN snip sn ON sn.location_name = a.location_name AND sn.rn = 1
         LEFT JOIN cat_map cm ON cm.location_name = a.location_name
         ORDER BY a.pct_neg DESC, a.n DESC
         """,
     )
+
+    def _snip_map(raw):
+        # The SQL MAP<STRING,STRING> comes back as a dict or a list of (key, value)
+        # pairs depending on connector version — normalize both, drop nulls.
+        raw = raw or {}
+        pairs = raw.items() if isinstance(raw, dict) else raw
+        return {k: v for k, v in pairs if isinstance(v, str) and v}
+
     out: list[StoreCategoryRow] = []
     for r in rows:
         def f(v):
             return float(v) if v is not None else None
-        # The SQL MAP<STRING,STRING> comes back as either a dict or a list of
-        # (key, value) pairs depending on connector version — normalize both.
-        raw_snips = r.get("snippets") or {}
-        pairs = raw_snips.items() if isinstance(raw_snips, dict) else raw_snips
-        snippets = {k: v for k, v in pairs if isinstance(v, str) and v}
         out.append(StoreCategoryRow(
             location_name=r["location_name"],
             speed=f(r["speed"]), cleanliness=f(r["cleanliness"]),
             order_accuracy=f(r["order_accuracy"]), quality=f(r["quality"]),
             service=f(r["service"]), n=int(r["n"] or 0),
             pct_neg=float(r["pct_neg"] or 0), snippet=r.get("snippet"),
-            snippets=snippets,
+            pos_snippets=_snip_map(r.get("pos_snippets")),
+            neg_snippets=_snip_map(r.get("neg_snippets")),
         ))
     return out
 
